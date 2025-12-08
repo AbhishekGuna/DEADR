@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DeadReckoning</string>
+
+    <!-- Update this string -->
+    <string name="get_initial_fix">Start / Reset</string>
+
+    <!-- Update this string -->
+    <string name="waiting_for_fix">Press Start / Reset</string>
+    <string name="error_no_sensors">Error: Not all required sensors (Accel, Gyro, Mag) are available on this device.</string>
+    <string name="dead_reckoning_info_format">--- Sensor Fusion ---\nBearing: %.1f° (Mag North)\n\n--- Pedometer ---\nSteps: %d\n\n--- Dead Reckoned Position ---\n(X, Y) = (%.2f m, %.2f m)</string>
+
+</resources>
