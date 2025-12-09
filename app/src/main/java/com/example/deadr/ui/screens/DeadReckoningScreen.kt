@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import com.example.deadr.ui.components.AccentGlassCard
 import com.example.deadr.ui.components.GlassCard
 import com.example.deadr.ui.components.PathCanvas
+import com.example.deadr.ui.components.StepDistanceCard
 import com.example.deadr.ui.theme.CyanPrimary
 import com.example.deadr.ui.theme.MagentaSecondary
 import com.example.deadr.ui.theme.StatBearing
@@ -66,6 +67,7 @@ fun DeadReckoningScreen(
     sensorMode: String,
     onStartReset: () -> Unit,
     slamFusionEnabled: Boolean = false,
+    strideLengthMeters: Float = 0.75f,
     modifier: Modifier = Modifier
 ) {
     val bearingDegrees = Math.toDegrees(currentHeading.toDouble()).toFloat()
@@ -270,6 +272,14 @@ fun DeadReckoningScreen(
                     }
                 }
             }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Step Distance Card
+            StepDistanceCard(
+                stepCount = stepCount,
+                strideLengthMeters = strideLengthMeters
+            )
             
             Spacer(modifier = Modifier.height(16.dp))
             

@@ -57,6 +57,8 @@ import androidx.compose.ui.unit.dp
 import com.example.deadr.slam.MapStorage
 import com.example.deadr.ui.components.AccentGlassCard
 import com.example.deadr.ui.components.GlassCard
+import com.example.deadr.ui.components.ImuDiagnosticsPanel
+import com.example.deadr.ui.components.LevelerCard
 import com.example.deadr.ui.theme.CyanPrimary
 import com.example.deadr.ui.theme.DeepSpace
 import com.example.deadr.ui.theme.ErrorRed
@@ -82,6 +84,23 @@ fun SettingsScreen(
     onStepThresholdChange: (Float) -> Unit,
     slamFusionEnabled: Boolean = false,
     onSlamFusionToggle: (Boolean) -> Unit = {},
+    // Leveler data
+    pitchDegrees: Float = 0f,
+    rollDegrees: Float = 0f,
+    // IMU Diagnostics data
+    accelX: Float = 0f,
+    accelY: Float = 0f,
+    accelZ: Float = 0f,
+    gyroX: Float = 0f,
+    gyroY: Float = 0f,
+    gyroZ: Float = 0f,
+    samplingRateHz: Float = 0f,
+    isMoving: Boolean = false,
+    accelMagnitudeHistory: List<Float> = emptyList(),
+    gyroMagnitudeHistory: List<Float> = emptyList(),
+    // Stride configuration
+    strideLengthMeters: Float = 0.75f,
+    onStrideLengthChange: (Float) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showDeleteDialog by remember { mutableStateOf<String?>(null) }
@@ -162,6 +181,50 @@ fun SettingsScreen(
                     color = SuccessGreen.copy(alpha = 0.8f),
                     modifier = Modifier.padding(horizontal = 8.dp)
                 )
+            }
+        }
+        
+        // Tools Section - Leveler
+        item {
+            SettingsSection(
+                title = "Leveler Tool",
+                icon = Icons.Default.Tune,
+                accentColor = SuccessGreen,
+                isExpanded = expandedSection == "leveler",
+                onToggle = { expandedSection = if (expandedSection == "leveler") null else "leveler" }
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    LevelerCard(
+                        pitchDegrees = pitchDegrees,
+                        rollDegrees = rollDegrees
+                    )
+                }
+            }
+        }
+        
+        // IMU Diagnostics Section
+        item {
+            SettingsSection(
+                title = "IMU Diagnostics",
+                icon = Icons.Default.Speed,
+                accentColor = CyanPrimary,
+                isExpanded = expandedSection == "diagnostics",
+                onToggle = { expandedSection = if (expandedSection == "diagnostics") null else "diagnostics" }
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    ImuDiagnosticsPanel(
+                        accelX = accelX,
+                        accelY = accelY,
+                        accelZ = accelZ,
+                        gyroX = gyroX,
+                        gyroY = gyroY,
+                        gyroZ = gyroZ,
+                        samplingRateHz = samplingRateHz,
+                        isMoving = isMoving,
+                        accelMagnitudeHistory = accelMagnitudeHistory,
+                        gyroMagnitudeHistory = gyroMagnitudeHistory
+                    )
+                }
             }
         }
         
@@ -247,6 +310,48 @@ fun SettingsScreen(
                     
                     Text(
                         text = "Lower values = more sensitive step detection.\nHigher values = fewer false positives.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+                    
+                    Spacer(Modifier.height(16.dp))
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                    Spacer(Modifier.height(16.dp))
+                    
+                    // Stride Length Configuration
+                    Text(
+                        text = "Stride Length",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = TextSecondary
+                    )
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Slider(
+                            value = strideLengthMeters,
+                            onValueChange = onStrideLengthChange,
+                            valueRange = 0.3f..1.5f,
+                            steps = 23,
+                            modifier = Modifier.weight(1f),
+                            colors = SliderDefaults.colors(
+                                thumbColor = SuccessGreen,
+                                activeTrackColor = SuccessGreen,
+                                inactiveTrackColor = SuccessGreen.copy(alpha = 0.3f)
+                            )
+                        )
+                        Spacer(Modifier.width(16.dp))
+                        Text(
+                            text = String.format("%.2f m", strideLengthMeters),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    
+                    Text(
+                        text = "Adjust based on your walking stride. Used for distance estimation.",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )

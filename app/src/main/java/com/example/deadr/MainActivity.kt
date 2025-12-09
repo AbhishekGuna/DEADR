@@ -49,6 +49,7 @@ import com.example.deadr.ui.screens.DeadReckoningScreen
 import com.example.deadr.ui.screens.SettingsScreen
 import com.example.deadr.ui.theme.DEADRTheme
 import kotlin.math.PI
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.math.sin
@@ -121,6 +122,30 @@ class MainActivity : ComponentActivity(), SensorEventListener {
     private var voAccumulatedHeading = 0f
     private var voAccumulatedConfidence = 0f
     private var voSampleCount = 0
+    
+    // Leveler data - pitch and roll in degrees
+    private var _pitchDegrees = mutableFloatStateOf(0f)
+    private var _rollDegrees = mutableFloatStateOf(0f)
+    
+    // IMU Diagnostics data
+    private var _accelX = mutableFloatStateOf(0f)
+    private var _accelY = mutableFloatStateOf(0f)
+    private var _accelZ = mutableFloatStateOf(0f)
+    private var _gyroX = mutableFloatStateOf(0f)
+    private var _gyroY = mutableFloatStateOf(0f)
+    private var _gyroZ = mutableFloatStateOf(0f)
+    private var _samplingRateHz = mutableFloatStateOf(0f)
+    private var _isMoving = mutableStateOf(false)
+    private var _accelMagnitudeHistory = mutableStateListOf<Float>()
+    private var _gyroMagnitudeHistory = mutableStateListOf<Float>()
+    private var lastAccelTimestamp: Long = 0
+    private var accelSampleCount = 0
+    private var lastSamplingRateUpdate: Long = 0
+    private val motionVarianceBuffer = mutableListOf<Float>()
+    
+    // Step distance data
+    private var _strideLengthMeters = mutableFloatStateOf(0.75f)
+    private var _walkingStartTime = mutableStateOf(0L)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -170,6 +195,26 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         val confidence by _confidence
         val savedMaps = _savedMaps.toList()
         val slamFusionEnabled by _slamFusionEnabled
+        
+        // Leveler data
+        val pitchDegrees by _pitchDegrees
+        val rollDegrees by _rollDegrees
+        
+        // IMU Diagnostics data
+        val accelX by _accelX
+        val accelY by _accelY
+        val accelZ by _accelZ
+        val gyroX by _gyroX
+        val gyroY by _gyroY
+        val gyroZ by _gyroZ
+        val samplingRateHz by _samplingRateHz
+        val isMoving by _isMoving
+        val accelMagnitudeHistory = _accelMagnitudeHistory.toList()
+        val gyroMagnitudeHistory = _gyroMagnitudeHistory.toList()
+        
+        // Step distance data
+        val strideLengthMeters by _strideLengthMeters
+        val walkingStartTime by _walkingStartTime
         
         // Lifecycle observer for sensor registration
         val lifecycleOwner = LocalLifecycleOwner.current
@@ -264,7 +309,8 @@ class MainActivity : ComponentActivity(), SensorEventListener {
                                 isTracking = isTracking,
                                 sensorMode = sensorMode,
                                 onStartReset = { resetState() },
-                                slamFusionEnabled = slamFusionEnabled
+                                slamFusionEnabled = slamFusionEnabled,
+                                strideLengthMeters = strideLengthMeters
                             )
                         }
                         Screen.CameraMap -> {
@@ -298,6 +344,25 @@ class MainActivity : ComponentActivity(), SensorEventListener {
                                         // Auto-start camera when enabling fusion
                                         startMapping()
                                     }
+                                },
+                                // Leveler data
+                                pitchDegrees = pitchDegrees,
+                                rollDegrees = rollDegrees,
+                                // IMU Diagnostics data
+                                accelX = accelX,
+                                accelY = accelY,
+                                accelZ = accelZ,
+                                gyroX = gyroX,
+                                gyroY = gyroY,
+                                gyroZ = gyroZ,
+                                samplingRateHz = samplingRateHz,
+                                isMoving = isMoving,
+                                accelMagnitudeHistory = accelMagnitudeHistory,
+                                gyroMagnitudeHistory = gyroMagnitudeHistory,
+                                // Stride configuration
+                                strideLengthMeters = strideLengthMeters,
+                                onStrideLengthChange = { stride ->
+                                    _strideLengthMeters.floatValue = stride
                                 }
                             )
                         }
@@ -433,10 +498,69 @@ class MainActivity : ComponentActivity(), SensorEventListener {
                 }
                 Sensor.TYPE_ACCELEROMETER -> {
                     System.arraycopy(event.values, 0, accelData, 0, minOf(3, event.values.size))
+                    
+                    // Update live IMU diagnostics values
+                    _accelX.floatValue = accelData[0]
+                    _accelY.floatValue = accelData[1]
+                    _accelZ.floatValue = accelData[2]
+                    
+                    // Compute pitch and roll for leveler
+                    val accelMagnitude = sqrt(accelData[0].pow(2) + accelData[1].pow(2) + accelData[2].pow(2))
+                    _pitchDegrees.floatValue = (atan2(accelData[1].toDouble(), 
+                        sqrt((accelData[0].pow(2) + accelData[2].pow(2)).toDouble())) * 180 / PI).toFloat()
+                    _rollDegrees.floatValue = (atan2(accelData[0].toDouble(), 
+                        accelData[2].toDouble()) * 180 / PI).toFloat()
+                    
+                    // Update sampling rate (every 500ms)
+                    val currentTime = System.currentTimeMillis()
+                    accelSampleCount++
+                    if (currentTime - lastSamplingRateUpdate >= 500) {
+                        val elapsedSeconds = (currentTime - lastSamplingRateUpdate) / 1000f
+                        _samplingRateHz.floatValue = accelSampleCount / elapsedSeconds
+                        accelSampleCount = 0
+                        lastSamplingRateUpdate = currentTime
+                    }
+                    
+                    // Update accelerometer magnitude history for sparkline (keep last 50 samples ~ 10s at 5Hz UI update)
+                    if (currentTime - lastAccelTimestamp >= 200) { // Sample every 200ms for sparkline
+                        _accelMagnitudeHistory.add(accelMagnitude)
+                        if (_accelMagnitudeHistory.size > 50) {
+                            _accelMagnitudeHistory.removeAt(0)
+                        }
+                        lastAccelTimestamp = currentTime
+                        
+                        // Motion detection based on acceleration variance
+                        motionVarianceBuffer.add(accelMagnitude)
+                        if (motionVarianceBuffer.size > 10) {
+                            motionVarianceBuffer.removeAt(0)
+                        }
+                        if (motionVarianceBuffer.size >= 5) {
+                            val mean = motionVarianceBuffer.average().toFloat()
+                            val variance = motionVarianceBuffer.map { (it - mean).pow(2) }.average().toFloat()
+                            _isMoving.value = variance > 0.3f // Threshold for motion detection
+                        }
+                    }
+                    
                     detectStep()
                 }
                 Sensor.TYPE_GYROSCOPE -> {
                     System.arraycopy(event.values, 0, gyroData, 0, minOf(3, event.values.size))
+                    
+                    // Update live IMU diagnostics values
+                    _gyroX.floatValue = gyroData[0]
+                    _gyroY.floatValue = gyroData[1]
+                    _gyroZ.floatValue = gyroData[2]
+                    
+                    // Update gyro magnitude history for sparkline
+                    val gyroMagnitude = sqrt(gyroData[0].pow(2) + gyroData[1].pow(2) + gyroData[2].pow(2))
+                    val currentTime = System.currentTimeMillis()
+                    if (_gyroMagnitudeHistory.size == 0 || currentTime - lastAccelTimestamp >= 200) {
+                        _gyroMagnitudeHistory.add(gyroMagnitude)
+                        if (_gyroMagnitudeHistory.size > 50) {
+                            _gyroMagnitudeHistory.removeAt(0)
+                        }
+                    }
+                    
                     processGyro(event.timestamp)
                 }
                 Sensor.TYPE_MAGNETIC_FIELD -> {

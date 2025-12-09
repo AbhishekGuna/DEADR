@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">DeadReckoning</string>
+    <string name="app_name">ReckonSLAM</string>
 
     <!-- Update this string -->
     <string name="get_initial_fix">Start / Reset</string>
