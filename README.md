@@ -131,4 +131,5 @@ Planned enhancements include:
   https://docs.opencv.org/4.x/d5/df8/tutorial_dev_with_OCV_on_Android.html  
 - Project Repository: https://github.com/AbhishekGuna/ReckonSLAM  
 - Demo Video:  
-  https://drive.google.com/drive/folders/1a8vefgEPwJSAnBktxZe_kVRn7sgvOSXw  
+  https://drive.google.com/drive/folders/1a8vefgEPwJSAnBktxZe_kVRn7sgvOSXw
+
